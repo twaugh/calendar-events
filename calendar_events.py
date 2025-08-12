@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from urllib.parse import urlparse, urlunparse
 
 from dateutil import parser as date_parser
 from dateutil.relativedelta import relativedelta
@@ -193,6 +194,38 @@ def has_user_declined(event: Dict[str, Any], user_email: str) -> bool:
 
     return False
 
+def clean_url(url: str) -> str:
+    """
+    Clean URL by removing query parameters.
+
+    This is particularly useful for Google Docs URLs that contain
+    tracking parameters like ?usp=meet_tnfm_calendar.
+
+    Args:
+        url: The URL to clean
+
+    Returns:
+        The URL without query parameters
+    """
+    if not url:
+        return url
+
+    try:
+        parsed = urlparse(url)
+        # Reconstruct URL without query parameters
+        cleaned = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            '',  # Remove query string
+            parsed.fragment
+        ))
+        return cleaned
+    except Exception:
+        # If URL parsing fails, return original URL
+        return url
+
 def get_accepted_attendees(event: Dict[str, Any]) -> List[str]:
     """Get list of attendees who have accepted the event."""
     attendees = event.get('attendees', [])
@@ -211,14 +244,15 @@ def get_accepted_attendees(event: Dict[str, Any]) -> List[str]:
     return accepted
 
 def get_event_attachments(event: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Get event attachments."""
+    """Get event attachments with cleaned URLs."""
     attachments = event.get('attachments', [])
     result = []
 
     for attachment in attachments:
+        file_url = attachment.get('fileUrl', '')
         attachment_info = {
             'title': attachment.get('title', ''),
-            'fileUrl': attachment.get('fileUrl', ''),
+            'fileUrl': clean_url(file_url),
             'mimeType': attachment.get('mimeType', '')
         }
         result.append(attachment_info)
